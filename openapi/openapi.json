@@ -1,0 +1,735 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Spines",
+    "description": "Self-hosted media library. The same types drive this document, the web UI, and MCP.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [],
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "The process has finished its startup scan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/items": {
+      "get": {
+        "tags": [],
+        "operationId": "list_items",
+        "parameters": [
+          {
+            "name": "plugin",
+            "in": "query",
+            "description": "`music` or `books`. Omit it to list both shelves.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Every whitespace-separated word must appear.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Items, ordered by shelf sort key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemOut"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown plugin id"
+          }
+        }
+      }
+    },
+    "/api/items/{id}": {
+      "get": {
+        "tags": [],
+        "operationId": "get_item",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Catalog id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such item"
+          }
+        }
+      }
+    },
+    "/api/items/{id}/audio/{index}": {
+      "get": {
+        "tags": [],
+        "operationId": "audio",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Album id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "description": "Track index inside the album",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whole audio file"
+          },
+          "206": {
+            "description": "Byte range"
+          },
+          "404": {
+            "description": "No such track"
+          },
+          "416": {
+            "description": "Range is outside the file"
+          }
+        }
+      }
+    },
+    "/api/items/{id}/cover": {
+      "get": {
+        "tags": [],
+        "operationId": "cover",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Catalog id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG cover",
+            "content": {
+              "image/jpeg": {}
+            }
+          },
+          "404": {
+            "description": "No cover"
+          }
+        }
+      }
+    },
+    "/api/items/{id}/spine": {
+      "get": {
+        "tags": [],
+        "operationId": "spine_image",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Catalog id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Generated spine PNG",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "404": {
+            "description": "No spine"
+          }
+        }
+      }
+    },
+    "/api/now-playing": {
+      "get": {
+        "tags": [],
+        "operationId": "get_now",
+        "responses": {
+          "200": {
+            "description": "What this process is playing, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NowPlaying"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "post_now",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NowPlaying"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stored for this process only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NowPlaying"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins": {
+      "get": {
+        "tags": [],
+        "operationId": "plugins",
+        "responses": {
+          "200": {
+            "description": "Shelves this process knows about",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PluginInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rescan": {
+      "post": {
+        "tags": [],
+        "operationId": "rescan",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "description": "When true, read every file again even if the stamp matches.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scan reports, one per shelf",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScanReport"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": [
+          "ok",
+          "scans"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "scans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScanReport"
+            }
+          }
+        }
+      },
+      "ItemOut": {
+        "type": "object",
+        "description": "Catalog row as it crosses HTTP. Paths and the search haystack stay in SQLite.",
+        "required": [
+          "id",
+          "plugin",
+          "view",
+          "title",
+          "subtitle",
+          "sortKey",
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "$ref": "#/components/schemas/PublicBody"
+          },
+          "id": {
+            "type": "string"
+          },
+          "plugin": {
+            "$ref": "#/components/schemas/PluginId"
+          },
+          "sortKey": {
+            "type": "string"
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "view": {
+            "$ref": "#/components/schemas/ViewName"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "NowPlaying": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "title",
+          "subtitle",
+          "trackTitle",
+          "trackIndex",
+          "positionMs",
+          "paused"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "positionMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "subtitle": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "trackIndex": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "trackTitle": {
+            "type": "string"
+          }
+        }
+      },
+      "Palette": {
+        "type": "object",
+        "required": [
+          "bg",
+          "fg",
+          "accent"
+        ],
+        "properties": {
+          "accent": {
+            "type": "string"
+          },
+          "bg": {
+            "type": "string"
+          },
+          "fg": {
+            "type": "string"
+          }
+        }
+      },
+      "PluginId": {
+        "type": "string",
+        "description": "Which shelf an item belongs to. One closed set. A new shelf is a new variant.",
+        "enum": [
+          "music",
+          "books"
+        ]
+      },
+      "PluginInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "rootConfigured",
+          "items"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PluginId"
+          },
+          "items": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "rootConfigured": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PublicAlbum": {
+        "type": "object",
+        "required": [
+          "artist",
+          "tracks"
+        ],
+        "properties": {
+          "artist": {
+            "type": "string"
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicTrack"
+            }
+          }
+        }
+      },
+      "PublicBody": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicAlbum"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "album"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicBook"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "book"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "PublicBook": {
+        "type": "object",
+        "required": [
+          "calibreId",
+          "authors",
+          "tags",
+          "formats",
+          "palette",
+          "spine"
+        ],
+        "properties": {
+          "authors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "calibreId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pages": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "palette": {
+            "$ref": "#/components/schemas/Palette"
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seriesIndex": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "spine": {
+            "$ref": "#/components/schemas/SpineStyle"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PublicTrack": {
+        "type": "object",
+        "description": "Track fields the browser is allowed to see. The file path stays in the catalog.",
+        "required": [
+          "title",
+          "durationMs",
+          "disc",
+          "number",
+          "index"
+        ],
+        "properties": {
+          "disc": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "ScanReport": {
+        "type": "object",
+        "required": [
+          "plugin",
+          "changed",
+          "unchanged",
+          "removed",
+          "elapsedMs",
+          "skipped",
+          "reason"
+        ],
+        "properties": {
+          "changed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "elapsedMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "unchanged": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "SpineStyle": {
+        "type": "object",
+        "required": [
+          "width",
+          "height",
+          "font",
+          "caps",
+          "titleSize",
+          "lines",
+          "mark",
+          "title"
+        ],
+        "properties": {
+          "caps": {
+            "type": "boolean"
+          },
+          "font": {
+            "type": "string"
+          },
+          "height": {
+            "type": "number",
+            "format": "double"
+          },
+          "lines": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "mark": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "titleSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ViewName": {
+        "type": "string",
+        "description": "How the web UI opens an item. The value travels with the item.",
+        "enum": [
+          "cd-wall",
+          "book-planks"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "library",
+      "description": "Catalog and playback"
+    }
+  ]
+}
