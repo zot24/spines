@@ -1,0 +1,19 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: varlock
+        run: npm install -g varlock@1.25.0
+      - name: checks
+        run: bash scripts/check.sh
+      - name: image
+        run: docker build -t spines:ci .

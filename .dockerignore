@@ -1,0 +1,8 @@
+target
+.git
+demo-library
+spines-data
+BRIEF.md
+**/*.db
+**/*.db-wal
+**/*.db-shm
