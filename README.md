@@ -11,7 +11,8 @@ The media folders are the libraries. Mount them read-only. Spines does not write
 Set the paths with environment variables.
 
 - `SPINES_DATA` is the data folder. The compose file mounts the host path `SPINES_DATA_DIR` at `/data`.
-- `SPINES_MUSIC` is the music root. Leave it empty to turn the music shelf off. A missing folder leaves the albums already in the catalog. An empty folder is an empty shelf, and the next scan removes those albums.
+- `SPINES_MEDIA` is the read-only mount a music folder must stay inside. It defaults to `SPINES_MUSIC`.
+- `SPINES_MUSIC` is the folder the first-open screen offers. Spines does not scan it until that choice is saved in the data folder. A missing saved folder leaves the albums already in the catalog. An empty saved folder is an empty shelf, and the next scan removes those albums.
 - `SPINES_BOOKS` is the books root. It is a Calibre library. `metadata.db` can sit in that directory or one directory down. Spines opens it read-only. A missing database leaves the books already in the catalog.
 - `SPINES_BIND` is the listen address. It defaults to `0.0.0.0:8787`. There are no accounts. Anyone who can reach this address can use the library.
 - `SPINES_FORCE_RESCAN=1` reads every file on that start, even when the stamp matches.
@@ -29,13 +30,15 @@ docker compose -f docker-compose.example.yml up --build
 
 Open `http://127.0.0.1:8787`.
 
-The first start walks the libraries and writes the catalog before it listens. The log line looks like this.
+The first visit asks where the music is. The field starts with `SPINES_MUSIC`. Continue checks that the folder exists, is readable, and sits inside `SPINES_MEDIA`, then saves the path and scans. Library in the header changes it later. A changed folder scans only files whose size or time changed. With no `SPINES_MEDIA` and no `SPINES_MUSIC`, that screen stays closed and books still open.
+
+Books are scanned at startup from `SPINES_BOOKS`. The log line looks like this.
 
 ```text
 scan plugin=music changed=24 unchanged=0 removed=0 elapsed_ms=6138 skipped=false reason=reconciled
 ```
 
-The next start, with the same data folder and the same files, logs `skipped=true reason=stamp` and does not read tags or `metadata.db`.
+The next start, with the same data folder, skips the setup screen. When the file stamps still match, the log says `skipped=true reason=stamp` and Spines does not read tags or `metadata.db`.
 
 `POST /api/rescan` scans again. `POST /api/rescan?force=true` reads every file.
 
@@ -63,8 +66,8 @@ No streaming to other players. No tag editing. No downloads. No replacement for 
 
 ## Demo
 
-`docs/demo/demo.webm` uses public-domain recordings and Project Gutenberg books. A case slides out and plays. The container is then removed and started again on the same data folder. The albums and the books are already there.
+`docs/demo/demo.webm` uses public-domain recordings and Project Gutenberg books. The first open offers `/music`. Continue scans, and a case slides out and plays. The container is then removed and started again on the same data folder. The albums and the books are already there, and the setup screen does not return.
 
 ## Umbrel
 
-`umbrel/` is the app package. Books mount the Calibre-Web library read-only, and Calibre-Web is a dependency. The music volume is not set, because the host path is not known. The image reference is not a published image.
+`umbrel/` is the app package. Books mount the Calibre-Web library read-only, and Calibre-Web is a dependency. Music mounts the Umbrel Downloads folder read-only at `/media`, and the first-open screen starts at `/media/music` (`Downloads/music`). The image reference is not a published image.

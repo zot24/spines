@@ -2,7 +2,8 @@
 # SPINES_DATA_DIR is the catalog, generated spines, and cover cache. Back this up.
 # Recreating the container with the same folder brings the library back without a rescan.
 # SPINES_MUSIC_DIR and SPINES_BOOKS_DIR are the libraries. They are mounted read-only.
-# Spines never writes them. Leave a variable empty and delete that volume to disable a shelf.
+# Spines never writes them. Mount a parent of the music folder when the setup screen
+# should offer more than one directory inside it.
 services:
   spines:
     build: .
@@ -16,6 +17,7 @@ services:
     environment:
       SPINES_DATA: /data
       SPINES_BIND: 0.0.0.0:8787
+      SPINES_MEDIA: /music
       SPINES_MUSIC: /music
       SPINES_BOOKS: /books
     volumes:
