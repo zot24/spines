@@ -202,6 +202,53 @@
         }
       }
     },
+    "/api/music": {
+      "get": {
+        "tags": [],
+        "operationId": "get_music",
+        "responses": {
+          "200": {
+            "description": "Whether the music folder has been chosen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MusicSetup"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [],
+        "operationId": "post_music",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MusicChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The folder was saved and scanned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MusicSetup"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The folder is missing, unreadable, or outside the media mount"
+          }
+        }
+      }
+    },
     "/api/now-playing": {
       "get": {
         "tags": [],
@@ -367,6 +414,42 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "MusicChoice": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "MusicSetup": {
+        "type": "object",
+        "required": [
+          "needed",
+          "defaultPath",
+          "mediaRoot"
+        ],
+        "properties": {
+          "defaultPath": {
+            "type": "string"
+          },
+          "mediaRoot": {
+            "type": "string"
+          },
+          "musicRoot": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "needed": {
+            "type": "boolean"
           }
         }
       },

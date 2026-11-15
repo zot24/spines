@@ -15,14 +15,12 @@ mod store;
 #[cfg(test)]
 mod tests;
 
-pub use config::Config;
+pub use config::{choose_music, Config};
 pub use domain::{Item, ItemBody, ItemOut, NowPlaying, PluginId, ScanReport};
 pub use error::{Error, Result};
 pub use plugin::Plugin;
 pub use reconcile::reconcile;
 pub use store::Store;
-
-use std::path::Path;
 
 pub fn open(cfg: &Config) -> Result<Store> {
     Store::open(&cfg.data_dir)
@@ -31,20 +29,30 @@ pub fn open(cfg: &Config) -> Result<Store> {
 pub fn scan(store: &Store, cfg: &Config, force: bool) -> Result<Vec<ScanReport>> {
     let mut reports = Vec::new();
     for plugin in plugin::registry() {
-        let root = match plugin.id() {
-            PluginId::Music => cfg.music.as_deref(),
-            PluginId::Books => cfg.books.as_deref(),
+        let report = match plugin.id() {
+            PluginId::Music => match store.music_root()? {
+                Some(path) => reconcile(store, plugin.as_ref(), Some(path.as_path()), force)?,
+                None => ScanReport {
+                    plugin: "music".to_string(),
+                    changed: 0,
+                    unchanged: 0,
+                    removed: 0,
+                    elapsed_ms: 0,
+                    skipped: true,
+                    reason: "unset".to_string(),
+                },
+            },
+            PluginId::Books => reconcile(store, plugin.as_ref(), cfg.books.as_deref(), force)?,
         };
-        let report = reconcile(store, plugin.as_ref(), root, force)?;
         eprintln!("{}", report.log_line());
         reports.push(report);
     }
     Ok(reports)
 }
 
-pub fn media_root(cfg: &Config, plugin: PluginId) -> Option<&Path> {
+pub fn shelf_configured(store: &Store, cfg: &Config, plugin: PluginId) -> bool {
     match plugin {
-        PluginId::Music => cfg.music.as_deref(),
-        PluginId::Books => cfg.books.as_deref(),
+        PluginId::Music => store.music_root().ok().flatten().is_some(),
+        PluginId::Books => cfg.books.is_some(),
     }
 }

@@ -53,6 +53,10 @@ impl Store {
               stamp TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS items_plugin_sort ON items (plugin, sort_key);
+            CREATE TABLE IF NOT EXISTS settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            );
             ",
         )?;
         Ok(Self {
@@ -93,6 +97,47 @@ impl Store {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub fn music_root(&self) -> Result<Option<PathBuf>> {
+        let conn = self.lock();
+        let exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'settings'",
+            [],
+            |row| row.get(0),
+        )?;
+        if exists == 0 {
+            return Ok(None);
+        }
+        let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = 'music_root'")?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? {
+            let value: String = row.get(0)?;
+            let value = value.trim();
+            if value.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(PathBuf::from(value)))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_music_root(&self, path: &Path) -> Result<()> {
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('music_root', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [path.to_string_lossy().as_ref()],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_music_root(&self) -> Result<()> {
+        let conn = self.lock();
+        conn.execute("DELETE FROM settings WHERE key = 'music_root'", [])?;
+        Ok(())
     }
 
     pub fn stamp(&self, plugin: PluginId) -> Result<Option<String>> {

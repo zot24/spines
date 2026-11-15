@@ -302,13 +302,43 @@
   .tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 12px 0 0; list-style: none; }
   .tags li { border: 1px solid #3a342c; border-radius: 999px; padding: 4px 8px; font: 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; }
   dialog .close { position: absolute; top: 16px; right: 16px; }
+  dialog.setup {
+    width: min(440px, calc(100vw - 32px));
+    margin: auto;
+    padding: 28px;
+    border: 1px solid #2a261f;
+    border-radius: 18px;
+    background: #14110e;
+    color: inherit;
+  }
+  dialog.setup::backdrop { background: rgb(0 0 0 / 0.72); }
+  dialog.setup h2 {
+    margin: 0 0 8px;
+    font: 600 28px/1.15 "Iowan Old Style", Palatino, Georgia, serif;
+    letter-spacing: -0.02em;
+  }
+  dialog.setup p { margin: 0 0 18px; color: #d9d0c2; }
+  dialog.setup label { display: block; margin: 0 0 6px; font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #c8bba6; }
+  dialog.setup input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #3a342c;
+    border-radius: 10px;
+    background: #1c1914;
+    color: inherit;
+    padding: 12px 14px;
+    font: 16px/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  #setup-error { margin: 10px 0 0; color: #e7b2a2; }
+  .setup-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  dialog.setup .setup-actions button { position: static; }
   @media (max-width: 640px) {
     header { flex-wrap: wrap; gap: 10px; }
     .mark { font-size: 18px; letter-spacing: 0.08em; }
     header input { flex: 1 0 100%; max-width: none; margin-left: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .case, #player, .spine { transition: none; animation: none; }
+    .case, #player, .spine, dialog.setup { transition: none; animation: none; }
     .case.out, .case:active { transform: none; }
   }
 </style>
@@ -322,6 +352,7 @@
   </nav>
   <input id="q" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
   <p id="count"></p>
+  <button type="button" class="close" id="library">Library</button>
 </header>
 <main>
   <p id="status" hidden></p>
@@ -344,6 +375,19 @@
   <audio id="audio" controls preload="none"></audio>
 </aside>
 <dialog id="book" class="sheet"></dialog>
+<dialog id="setup" class="setup">
+  <form id="setup-form">
+    <h2 id="setup-title">Where is the music?</h2>
+    <p>Spines reads this folder and does not write it.</p>
+    <label for="setup-path">Folder</label>
+    <input id="setup-path" name="path" autocomplete="off" spellcheck="false">
+    <p id="setup-error" hidden></p>
+    <div class="setup-actions">
+      <button type="button" class="close" id="setup-cancel">Cancel</button>
+      <button type="submit" class="close" id="setup-save">Continue</button>
+    </div>
+  </form>
+</dialog>
 <script>
 const q = document.querySelector("#q");
 const wall = document.querySelector("#wall");
@@ -645,7 +689,68 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && player.classList.contains("open")) closePlayer();
 });
 
-fetch("/api/plugins").then((res) => res.json()).then((rows) => { plugins = rows; load(); }).catch(() => load());
+const setupDialog = document.querySelector("#setup");
+const setupError = document.querySelector("#setup-error");
+let musicNeeded = false;
+
+async function readSetup() {
+  const res = await fetch("/api/music");
+  if (!res.ok) throw new Error("The catalog did not answer.");
+  return res.json();
+}
+
+function showSetup(setup, editing) {
+  musicNeeded = Boolean(setup.needed) && !editing;
+  document.querySelector("#setup-title").textContent = musicNeeded ? "Where is the music?" : "Music folder";
+  document.querySelector("#setup-save").textContent = musicNeeded ? "Continue" : "Save";
+  document.querySelector("#setup-cancel").hidden = musicNeeded;
+  document.querySelector("#setup-path").value = setup.musicRoot || setup.defaultPath || "";
+  setupError.hidden = true;
+  if (!setupDialog.open) setupDialog.showModal();
+  document.querySelector("#setup-path").focus();
+}
+
+setupDialog.addEventListener("cancel", (event) => {
+  if (musicNeeded) event.preventDefault();
+});
+document.querySelector("#setup-cancel").addEventListener("click", () => {
+  if (!musicNeeded) setupDialog.close();
+});
+document.querySelector("#setup-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const path = document.querySelector("#setup-path").value.trim();
+  const res = await fetch("/api/music", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) {
+    setupError.hidden = false;
+    setupError.textContent = (await res.text()) || "That folder did not open.";
+    return;
+  }
+  musicNeeded = false;
+  setupDialog.close();
+  await load();
+});
+document.querySelector("#library").addEventListener("click", async () => {
+  try {
+    showSetup(await readSetup(), true);
+  } catch (err) {
+    note(err.message);
+  }
+});
+
+fetch("/api/plugins")
+  .then((res) => res.json())
+  .then((rows) => { plugins = rows; })
+  .catch(() => {})
+  .then(() => readSetup())
+  .then((setup) => {
+    if (setup.needed) showSetup(setup, false);
+    else load();
+  })
+  .catch(() => load());
 </script>
 </body>
 </html>

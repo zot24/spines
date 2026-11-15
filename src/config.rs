@@ -8,7 +8,10 @@ use crate::error::{Error, Result};
 pub struct Config {
     pub data_dir: PathBuf,
     pub bind: SocketAddr,
-    pub music: Option<PathBuf>,
+    /// Directory a chosen music folder must stay inside.
+    pub media: Option<PathBuf>,
+    /// Prefill for the first-open screen. Not scanned until the choice is saved.
+    pub music_default: Option<PathBuf>,
     pub books: Option<PathBuf>,
 }
 
@@ -19,10 +22,13 @@ impl Config {
         let bind: SocketAddr = bind
             .parse()
             .map_err(|_| Error::msg(format!("SPINES_BIND is not an address: {bind}")))?;
+        let music_default = optional_path("SPINES_MUSIC");
+        let media = optional_path("SPINES_MEDIA").or_else(|| music_default.clone());
         Ok(Self {
             data_dir,
             bind,
-            music: optional_path("SPINES_MUSIC"),
+            media,
+            music_default,
             books: optional_path("SPINES_BOOKS"),
         })
     }
@@ -31,10 +37,39 @@ impl Config {
         Self {
             data_dir,
             bind: "127.0.0.1:0".parse().unwrap(),
-            music,
+            media: music.clone(),
+            music_default: music,
             books,
         }
     }
+}
+
+/// Accept a music folder only when it exists, is readable, and stays inside `media`.
+pub fn choose_music(media: &std::path::Path, raw: &str) -> Result<PathBuf> {
+    let raw = raw.trim();
+    if raw.is_empty() || raw.contains('\0') {
+        return Err(Error::msg("Enter a folder inside the media mount."));
+    }
+    let media_c = media
+        .canonicalize()
+        .map_err(|_| Error::msg("The media mount is not readable."))?;
+    let candidate = std::path::Path::new(raw);
+    let joined = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        media_c.join(candidate)
+    };
+    let chosen = joined
+        .canonicalize()
+        .map_err(|_| Error::msg("That folder is not there."))?;
+    if !chosen.starts_with(&media_c) {
+        return Err(Error::msg("That folder is outside the media mount."));
+    }
+    if !chosen.is_dir() {
+        return Err(Error::msg("That path is not a folder."));
+    }
+    std::fs::read_dir(&chosen).map_err(|_| Error::msg("That folder is not readable."))?;
+    Ok(chosen)
 }
 
 fn required(key: &str) -> Result<PathBuf> {

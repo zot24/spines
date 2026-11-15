@@ -13,7 +13,7 @@ use tower::ServiceExt;
 use crate::domain::{ItemBody, PluginId};
 use crate::http::{router, AppState};
 use crate::mcp::{self, Reply};
-use crate::{reconcile, scan, Config, Store};
+use crate::{choose_music, reconcile, scan, Config, Store};
 
 fn wav(path: &Path) {
     let samples = 800u32;
@@ -111,6 +111,9 @@ fn open_at(data: &Path, music: Option<&Path>, books: Option<&Path>) -> (Config, 
         books.map(Path::to_path_buf),
     );
     let store = Store::open(data).unwrap();
+    if let Some(path) = music {
+        store.set_music_root(path).unwrap();
+    }
     (cfg, store)
 }
 
@@ -217,6 +220,51 @@ fn changed_bytes_update_the_hash() {
             .unwrap(),
         sha(&first)
     );
+}
+
+#[test]
+fn an_unset_music_folder_does_not_wipe_and_a_choice_scans() {
+    let media = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let music = media.path().join("music");
+    fs::create_dir(&music).unwrap();
+    music_tree(&music);
+    let outside = tempfile::tempdir().unwrap();
+    assert!(choose_music(media.path(), outside.path().to_str().unwrap()).is_err());
+    assert!(choose_music(media.path(), "../").is_err());
+    let chosen = choose_music(media.path(), "music").unwrap();
+    assert_eq!(chosen, music.canonicalize().unwrap());
+
+    let cfg = Config::for_roots(
+        data.path().to_path_buf(),
+        Some(media.path().to_path_buf()),
+        None,
+    );
+    let store = Store::open(data.path()).unwrap();
+    let first = scan(&store, &cfg, false).unwrap();
+    let music_report = first.iter().find(|r| r.plugin == "music").unwrap();
+    assert_eq!(music_report.reason, "unset");
+    assert!(store.items(Some(PluginId::Music), &[]).unwrap().is_empty());
+
+    store.set_music_root(&chosen).unwrap();
+    let saved = scan(&store, &cfg, false).unwrap();
+    let music_report = saved.iter().find(|r| r.plugin == "music").unwrap();
+    assert!(!music_report.skipped);
+    assert_eq!(store.items(Some(PluginId::Music), &[]).unwrap().len(), 1);
+
+    store.clear_music_root().unwrap();
+    let kept = scan(&store, &cfg, false).unwrap();
+    assert_eq!(
+        kept.iter().find(|r| r.plugin == "music").unwrap().reason,
+        "unset"
+    );
+    assert_eq!(store.items(Some(PluginId::Music), &[]).unwrap().len(), 1);
+
+    store.set_music_root(&chosen).unwrap();
+    let again = scan(&store, &cfg, false).unwrap();
+    let music_report = again.iter().find(|r| r.plugin == "music").unwrap();
+    assert!(music_report.skipped);
+    assert_eq!(music_report.reason, "stamp");
 }
 
 #[test]
@@ -332,6 +380,7 @@ fn reopening_the_catalog_skips_and_keeps_the_spine() {
     );
     let id = {
         let store = Store::open(data.path()).unwrap();
+        store.set_music_root(root.path()).unwrap();
         scan(&store, &cfg, false).unwrap();
         let id = store.items(Some(PluginId::Music), &[]).unwrap()[0]
             .id
@@ -346,6 +395,32 @@ fn reopening_the_catalog_skips_and_keeps_the_spine() {
     assert!(music.skipped, "{}", music.log_line());
     let seen = FileTime::from_last_modification_time(&fs::metadata(store.spine_path(&id)).unwrap());
     assert_eq!(seen, FileTime::from_unix_time(1_600_000_000, 0));
+}
+
+#[tokio::test]
+async fn books_without_a_media_mount_skip_the_setup_screen() {
+    let books = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    calibre(books.path(), false);
+    let (cfg, store) = open_at(data.path(), None, Some(books.path()));
+    let reports = scan(&store, &cfg, false).unwrap();
+    assert_eq!(
+        reports.iter().find(|r| r.plugin == "music").unwrap().reason,
+        "unset"
+    );
+    let app = router(AppState::new(store, cfg, reports));
+    let setup = request(
+        &app,
+        Request::builder()
+            .uri("/api/music")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(setup.status, StatusCode::OK);
+    let setup: serde_json::Value = serde_json::from_slice(&setup.body).unwrap();
+    assert_eq!(setup["needed"], false);
+    assert_eq!(setup["mediaRoot"], "");
 }
 
 #[tokio::test]
@@ -396,6 +471,48 @@ async fn http_lists_audio_and_now_playing() {
     assert!(html.contains("id=\"audio\""));
     assert!(html.contains("className = \"case\""));
     assert!(html.contains("className = \"shelf\""));
+    assert!(html.contains("id=\"setup\""));
+
+    let setup = request(
+        &app,
+        Request::builder()
+            .uri("/api/music")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(setup.status, StatusCode::OK);
+    let setup: serde_json::Value = serde_json::from_slice(&setup.body).unwrap();
+    assert_eq!(setup["needed"], false);
+
+    let rejected = request(
+        &app,
+        Request::builder()
+            .method("POST")
+            .uri("/api/music")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"path":"/etc"}"#))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(rejected.status, StatusCode::BAD_REQUEST);
+
+    let saved = request(
+        &app,
+        Request::builder()
+            .method("POST")
+            .uri("/api/music")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                "{{\"path\":{}}}",
+                serde_json::to_string(root.path().to_str().unwrap()).unwrap()
+            )))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(saved.status, StatusCode::OK);
+    let saved: serde_json::Value = serde_json::from_slice(&saved.body).unwrap();
+    assert_eq!(saved["needed"], false);
 
     let missing = request(
         &app,

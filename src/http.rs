@@ -11,7 +11,7 @@ use utoipa::{OpenApi, ToSchema};
 
 use crate::domain::{Item, ItemBody, ItemOut, NowPlaying, PluginId, ScanReport};
 use crate::reconcile::jail;
-use crate::{media_root, scan, Config, Store};
+use crate::{choose_music, scan, shelf_configured, Config, Store};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -74,6 +74,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/items/{id}/audio/{index}", get(audio))
         .route("/api/now-playing", get(get_now).post(post_now))
         .route("/api/rescan", post(rescan))
+        .route("/api/music", get(get_music).post(post_music))
         .route("/openapi.json", get(openapi))
         .route("/mcp", post(mcp_http))
         .route("/", get(index))
@@ -105,7 +106,9 @@ pub fn openapi_json() -> String {
         audio,
         get_now,
         post_now,
-        rescan
+        rescan,
+        get_music,
+        post_music
     ),
     components(schemas(
         Health,
@@ -120,7 +123,9 @@ pub fn openapi_json() -> String {
         PluginId,
         crate::domain::ViewName,
         NowPlaying,
-        ScanReport
+        ScanReport,
+        MusicSetup,
+        MusicChoice
     )),
     tags((name = "library", description = "Catalog and playback"))
 )]
@@ -146,7 +151,7 @@ async fn plugins(State(state): State<AppState>) -> Response {
         };
         out.push(PluginInfo {
             id,
-            root_configured: media_root(&state.cfg, id).is_some(),
+            root_configured: shelf_configured(&state.store, &state.cfg, id),
             items: items.len() as u32,
         });
     }
@@ -278,9 +283,10 @@ async fn audio(
     let Some(track) = album.tracks.iter().find(|t| t.index == index) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let Some(root) = state.cfg.music.as_deref() else {
+    let Some(root) = state.store.music_root().ok().flatten() else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    let root = root.as_path();
     let Some(path) = jail(root, &track.rel_path) else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -314,6 +320,80 @@ async fn post_now(State(state): State<AppState>, Json(body): Json<NowPlaying>) -
     }
     *state.now.lock().unwrap_or_else(|p| p.into_inner()) = Some(body.clone());
     json_no_store(&body)
+}
+
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct MusicSetup {
+    needed: bool,
+    default_path: String,
+    media_root: String,
+    music_root: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+struct MusicChoice {
+    path: String,
+}
+
+fn music_setup(state: &AppState) -> Result<MusicSetup, crate::Error> {
+    let saved = state.store.music_root()?;
+    Ok(MusicSetup {
+        needed: saved.is_none() && state.cfg.media.is_some(),
+        default_path: state
+            .cfg
+            .music_default
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
+        media_root: state
+            .cfg
+            .media
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
+        music_root: saved.map(|p| p.display().to_string()),
+    })
+}
+
+#[utoipa::path(get, path = "/api/music", responses((status = 200, description = "Whether the music folder has been chosen", body = MusicSetup)))]
+async fn get_music(State(state): State<AppState>) -> Response {
+    match music_setup(&state) {
+        Ok(setup) => Json(setup).into_response(),
+        Err(err) => fail(err),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/music",
+    request_body = MusicChoice,
+    responses(
+        (status = 200, description = "The folder was saved and scanned", body = MusicSetup),
+        (status = 400, description = "The folder is missing, unreadable, or outside the media mount")
+    )
+)]
+async fn post_music(State(state): State<AppState>, Json(body): Json<MusicChoice>) -> Response {
+    let Some(media) = state.cfg.media.as_deref() else {
+        return (StatusCode::BAD_REQUEST, "No media folder is configured.").into_response();
+    };
+    let chosen = match choose_music(media, &body.path) {
+        Ok(path) => path,
+        Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
+    };
+    if let Err(err) = state.store.set_music_root(&chosen) {
+        return fail(err);
+    }
+    match scan(&state.store, &state.cfg, false) {
+        Ok(reports) => {
+            *state.reports.lock().unwrap_or_else(|p| p.into_inner()) = reports;
+            match music_setup(&state) {
+                Ok(setup) => Json(setup).into_response(),
+                Err(err) => fail(err),
+            }
+        }
+        Err(err) => fail(err),
+    }
 }
 
 #[utoipa::path(
