@@ -66,7 +66,7 @@ No streaming to other players. No tag editing. No downloads. No replacement for 
 
 ## Demo
 
-`docs/demo/demo.webm` uses public-domain recordings and Project Gutenberg books. The first open offers `/music`. Continue scans, and a case slides out and plays. The container is then removed and started again on the same data folder. The albums and the books are already there, and the setup screen does not return.
+`docs/demo/demo.webm` uses the public-domain sample library. The first open offers `/media/music`. Continue scans and the albums appear. A terminal then runs `docker compose up -d --force-recreate` on the same data folder. The new container logs `skipped=true reason=stamp`, and the albums are already there.
 
 ## Umbrel
 
