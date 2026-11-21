@@ -44,7 +44,7 @@ The next start, with the same data folder, skips the setup screen. When the file
 
 ## Shelves
 
-Music is a row of CD jewel-case spines built from the album art and the tags. Tap a case. It slides out and plays in the browser. Previous and Next change the track.
+Music is a shelf of open CD cases. The cover is on the left and the disc is on the right. Tap a case. The disc slides out and the album plays in the browser. Previous and Next change the track.
 
 Books stand on a plank. The color comes from the cover. The width and the type come from the Calibre row, using the same rules as the bookshelf app at `163a6445`. The page shows the title, the authors, and the formats. It does not read the book and it does not download the file. Calibre-Web still owns the files.
 
