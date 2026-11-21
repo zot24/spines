@@ -70,4 +70,4 @@ No streaming to other players. No tag editing. No downloads. No replacement for 
 
 ## Umbrel
 
-`umbrel/` is the app package. Books mount the Calibre-Web library read-only, and Calibre-Web is a dependency. Music mounts the Umbrel Downloads folder read-only at `/media`, and the first-open screen starts at `/media/music` (`Downloads/music`). The image is `ghcr.io/zot24/spines:0.1.0`, pinned by digest in `umbrel/docker-compose.yml`. The published manifest is linux/amd64.
+`umbrel/` is the app package. Books mount the Calibre-Web library read-only, and Calibre-Web is a dependency. Music mounts the Umbrel Downloads folder read-only at `/media`, and the first-open screen starts at `/media/music` (`Downloads/music`). The image is `ghcr.io/zot24/spines:0.1.1`, pinned by digest in `umbrel/docker-compose.yml`. The published manifest is linux/amd64.
