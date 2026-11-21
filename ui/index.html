@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spines</title>
+<style>
+  :root {
+    --u: 1px;
+    --shelf: calc(360 * var(--u));
+    color-scheme: dark;
+    background: #0c0b09;
+    color: #ece8df;
+    font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  }
+  @media (max-width: 640px) {
+    :root { --u: 0.64px; }
+    #count { display: none; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; }
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: max(14px, env(safe-area-inset-top)) clamp(12px, 4vw, 48px) 14px;
+    background: linear-gradient(#0c0b09 70%, #0c0b0900);
+  }
+  .mark {
+    color: inherit;
+    text-decoration: none;
+    font: 500 22px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  nav { display: flex; gap: 4px; }
+  nav a {
+    color: #9a9386;
+    text-decoration: none;
+    font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px 10px;
+    border-radius: 999px;
+  }
+  nav a[aria-current="page"] { color: #f6f2e8; background: #221f1a; }
+  header input {
+    flex: 1;
+    max-width: 420px;
+    min-width: 0;
+    margin-left: auto;
+    padding: 10px 14px;
+    border: 1px solid #2c2924;
+    border-radius: 999px;
+    background: #161410;
+    color: inherit;
+    font: 16px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    outline: none;
+  }
+  header input:focus { border-color: #8a8172; }
+  #count {
+    margin: 0;
+    color: #8a8172;
+    font: 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    white-space: nowrap;
+  }
+  main { padding: 0 clamp(12px, 4vw, 48px) 80px; }
+  #status { color: #b7ad9e; padding: 48px 0; text-align: center; }
+  .wall {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 28px 18px;
+    padding: 8px 4px 40px;
+  }
+  .case {
+    all: unset;
+    cursor: pointer;
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    position: relative;
+  }
+  .case:focus-visible .jewel { outline: 2px solid #e4c27a; outline-offset: 4px; }
+  .jewel, .disc { transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .case:active .jewel { transform: translateY(-4px); }
+  .case.out { z-index: 2; }
+  .case.out .jewel { transform: translateY(-8px); }
+  .case.out .disc { transform: translateX(78%); }
+  .jewel {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 8px 1fr;
+    width: 100%;
+    aspect-ratio: 1.86 / 1;
+    padding: 7px;
+    border-radius: 3px 5px 5px 3px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0) 18%),
+      linear-gradient(90deg, #4a433c, #2b2722 7%, #2b2722 93%, #161310);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -1px 0 rgba(0,0,0,0.45),
+      0 14px 22px rgba(0,0,0,0.38);
+  }
+  .booklet, .tray, .hinge { min-width: 0; min-height: 0; }
+  .booklet {
+    overflow: hidden;
+    background: #111;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+  }
+  .booklet img, .disc img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #3a342c;
+  }
+  .hinge {
+    background: repeating-linear-gradient(#1a1714 0 3px, #3c362f 3px 5px);
+  }
+  .tray {
+    display: grid;
+    place-items: center;
+    overflow: visible;
+    background:
+      radial-gradient(circle at 50% 50%, #2a261f 0 46%, #10100e 47% 100%);
+    box-shadow: inset 0 6px 10px rgba(0,0,0,0.45);
+  }
+  .disc {
+    position: relative;
+    width: 84%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.45),
+      0 2px 5px rgba(0,0,0,0.45);
+  }
+  .disc::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    background: conic-gradient(from 24deg,
+      rgba(255,255,255,0.72),
+      rgba(150,160,176,0.15) 14%,
+      rgba(255,244,220,0.55) 28%,
+      rgba(80,80,88,0.2) 46%,
+      rgba(190,210,230,0.45) 62%,
+      rgba(255,255,255,0.2) 78%,
+      rgba(255,255,255,0.7));
+    -webkit-mask: radial-gradient(circle, transparent 0 60%, #000 63%);
+    mask: radial-gradient(circle, transparent 0 60%, #000 63%);
+  }
+  .disc::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, #0c0b09 0 36%, #ddd6cc 40% 68%, #0c0b09 70%);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.28);
+  }
+  .case-title, .case-artist {
+    display: block;
+    overflow: hidden;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  .case-title {
+    font-size: 13px;
+    font-weight: 650;
+    color: #f6f2e8;
+  }
+  .case-artist {
+    margin-top: -4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #b7ad9e;
+  }
+  .case-artist:empty { display: none; }
+  .shelf {
+    --gap: calc(56 * var(--u));
+    --plank: calc(12 * var(--u));
+    --top: var(--shelf);
+    --face: calc(var(--top) + var(--plank));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--gap) calc(5 * var(--u));
+    margin-top: 16px;
+    padding: 0 calc(10 * var(--u)) var(--gap);
+    background:
+      linear-gradient(to bottom, transparent var(--top), #9a8670 var(--top), #7d6b58 calc(var(--top) + 2 * var(--u)), #5b4c3f var(--face), rgb(70 58 48 / 0.35) var(--face), transparent calc(var(--face) + 22 * var(--u)))
+      0 0 / 100% calc(var(--shelf) + var(--gap)) repeat-y content-box;
+    background-clip: border-box;
+  }
+  .spine {
+    all: unset;
+    box-sizing: border-box;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(10 * var(--u));
+    width: calc(var(--w) * var(--u));
+    height: calc(var(--h) * var(--shelf));
+    margin-top: calc((1 - var(--h)) * var(--shelf));
+    padding: calc(12 * var(--u)) 0 calc(10 * var(--u));
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: calc(3 * var(--u));
+    box-shadow: inset calc(2 * var(--u)) 0 0 rgb(255 255 255 / 0.12), inset calc(-3 * var(--u)) 0 calc(6 * var(--u)) rgb(0 0 0 / 0.28);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  @media (hover: hover) {
+    .spine:hover { transform: translateY(calc(-18 * var(--u))); }
+  }
+  .spine:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .spine-author {
+    max-width: 88%;
+    font: 600 calc(9 * var(--u))/1.15 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--accent);
+    text-align: center;
+    overflow: hidden;
+  }
+  .spine-title {
+    flex: 1;
+    min-height: 0;
+    writing-mode: vertical-rl;
+    font-size: calc(var(--t) * var(--u));
+    line-height: 1.05;
+    text-align: start;
+    overflow: hidden;
+  }
+  .spine-title.lines-1 { white-space: nowrap; }
+  .caps .spine-title { text-transform: uppercase; letter-spacing: 0.02em; }
+  .font-serif .spine-title { font-family: Georgia, "Iowan Old Style", serif; font-weight: 700; }
+  .font-condensed .spine-title { font-family: "Arial Narrow", "Helvetica Neue", sans-serif; font-weight: 500; }
+  .font-mono .spine-title { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: calc(var(--t) * 0.85 * var(--u)); }
+  .font-display .spine-title { font-family: Impact, "Arial Black", sans-serif; font-size: calc(var(--t) * 1.15 * var(--u)); }
+  .font-grotesk .spine-title { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; }
+  .spine-mark {
+    max-width: 86%;
+    font: 600 calc(8 * var(--u))/1.1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    text-align: center;
+    overflow: hidden;
+  }
+  .spine-mark:empty.mark-dot::before, .spine-mark:empty.mark-ring::before, .spine-mark:empty.mark-bar::before { content: ""; display: block; }
+  .spine-mark:empty.mark-dot::before { width: calc(8 * var(--u)); height: calc(8 * var(--u)); border-radius: 50%; background: var(--accent); }
+  .spine-mark:empty.mark-ring::before { width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: 50%; border: calc(2 * var(--u)) solid var(--accent); }
+  .spine-mark:empty.mark-bar::before { width: calc(var(--w) * 0.45 * var(--u)); height: calc(3 * var(--u)); background: var(--accent); }
+  .spine-mark.mark-initials { font-family: Georgia, serif; letter-spacing: 0; text-transform: none; }
+  #player {
+    position: fixed;
+    z-index: 5;
+    top: 0;
+    right: 0;
+    width: min(440px, 100%);
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    gap: 16px;
+    padding: 22px;
+    background: #16130f;
+    color: #f3efe6;
+    box-shadow: -24px 0 60px rgba(0,0,0,0.45);
+    transform: translateX(105%);
+    transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  #player.open { transform: translateX(0); }
+  #player[hidden] { display: none; }
+  #player.open[hidden] { display: grid; }
+  .player-top { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+  .player-top h2 { margin: 0; font: 600 22px/1.2 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .player-top p { margin: 4px 0 0; color: #c8bba6; }
+  .player-disc {
+    width: min(240px, 100%);
+    aspect-ratio: 1;
+    justify-self: center;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%, #16130f 0 8%, transparent 9%),
+      conic-gradient(from 18deg, #f4f0e8, #9aa3ad, #f7f3ea, #6a6762, #e6d4be, #f4f0e8);
+    box-shadow: 0 16px 28px rgba(0,0,0,0.45);
+  }
+  .player-cover {
+    grid-area: 1 / 1;
+    width: 70%;
+    height: 70%;
+    max-height: none;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #2a241c;
+  }
+  .player-disc::after {
+    content: "";
+    grid-area: 1 / 1;
+    width: 16%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle, #16130f 0 34%, #ddd6cc 40% 68%, #16130f 70%);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.25);
+  }
+  ol { list-style: none; margin: 0; padding: 0; overflow: auto; min-height: 0; }
+  ol button {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 4px;
+    border: 0;
+    border-bottom: 1px solid #2a261f;
+    background: transparent;
+    color: inherit;
+    font: 15px/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    text-align: left;
+    cursor: pointer;
+  }
+  ol button[aria-current="true"] { color: #e4c27a; }
+  .transport { display: flex; gap: 8px; align-items: center; }
+  .transport button, .close, dialog .close {
+    border: 1px solid #3a342c;
+    background: #221e18;
+    color: inherit;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    cursor: pointer;
+  }
+  audio { width: 100%; }
+  dialog.sheet {
+    width: min(860px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px);
+    padding: 0;
+    border: 1px solid #2a261f;
+    border-radius: 18px;
+    background: #12100d;
+    color: inherit;
+  }
+  dialog.sheet::backdrop { background: rgb(0 0 0 / 0.72); }
+  .sheet-body { display: grid; grid-template-columns: minmax(160px, 280px) 1fr; gap: 28px; padding: 28px; position: relative; }
+  @media (max-width: 700px) { .sheet-body { grid-template-columns: 1fr; } }
+  .cover { aspect-ratio: 2 / 3; border-radius: 6px; overflow: hidden; background: var(--bg, #2a241c); }
+  .cover img { width: 100%; height: 100%; object-fit: cover; }
+  .details h2 { margin: 0 0 8px; font: 600 28px/1.15 Georgia, serif; }
+  .authors, .facts, .description { margin: 0 0 12px; }
+  .authors { color: #e4c27a; }
+  .facts, .description { color: #d9d0c2; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .description { white-space: pre-wrap; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 12px 0 0; list-style: none; }
+  .tags li { border: 1px solid #3a342c; border-radius: 999px; padding: 4px 8px; font: 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  dialog .close { position: absolute; top: 16px; right: 16px; }
+  dialog.setup {
+    width: min(440px, calc(100vw - 32px));
+    margin: auto;
+    padding: 28px;
+    border: 1px solid #2a261f;
+    border-radius: 18px;
+    background: #14110e;
+    color: inherit;
+  }
+  dialog.setup::backdrop { background: rgb(0 0 0 / 0.72); }
+  dialog.setup h2 {
+    margin: 0 0 8px;
+    font: 600 28px/1.15 "Iowan Old Style", Palatino, Georgia, serif;
+    letter-spacing: -0.02em;
+  }
+  dialog.setup p { margin: 0 0 18px; color: #d9d0c2; }
+  dialog.setup label { display: block; margin: 0 0 6px; font: 600 13px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; color: #c8bba6; }
+  dialog.setup input {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #3a342c;
+    border-radius: 10px;
+    background: #1c1914;
+    color: inherit;
+    padding: 12px 14px;
+    font: 16px/1.3 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  #setup-error { margin: 10px 0 0; color: #e7b2a2; }
+  .setup-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  dialog.setup .setup-actions button { position: static; }
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; gap: 10px; }
+    .mark { font-size: 18px; letter-spacing: 0.08em; }
+    header input { flex: 1 0 100%; max-width: none; margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .case, .jewel, .disc, #player, .spine, dialog.setup { transition: none; animation: none; }
+    .case.out .jewel, .case.out .disc, .case:active .jewel { transform: none; }
+    .case.out .jewel { outline: 2px solid #e4c27a; }
+  }
+</style>
+</head>
+<body data-view="music">
+<header>
+  <a class="mark" href="#music">Spines</a>
+  <nav>
+    <a href="#music" data-nav="music">Music</a>
+    <a href="#books" data-nav="books">Books</a>
+  </nav>
+  <input id="q" type="search" placeholder="Search" aria-label="Search" autocomplete="off">
+  <p id="count"></p>
+  <button type="button" class="close" id="library">Library</button>
+</header>
+<main>
+  <p id="status" hidden></p>
+  <div id="wall"></div>
+</main>
+<aside id="player" hidden role="dialog" aria-modal="true" aria-label="Now playing">
+  <div class="player-top">
+    <div>
+      <h2 id="player-title"></h2>
+      <p id="player-artist"></p>
+    </div>
+    <button type="button" class="close" id="player-close">Close</button>
+  </div>
+  <div class="player-disc"><img id="player-cover" class="player-cover" alt=""></div>
+  <ol id="tracks"></ol>
+  <div class="transport">
+    <button type="button" id="prev">Previous</button>
+    <button type="button" id="next">Next</button>
+  </div>
+  <audio id="audio" controls preload="none"></audio>
+</aside>
+<dialog id="book" class="sheet"></dialog>
+<dialog id="setup" class="setup">
+  <form id="setup-form">
+    <h2 id="setup-title">Where is the music?</h2>
+    <p>Spines reads this folder and does not write it.</p>
+    <label for="setup-path">Folder</label>
+    <input id="setup-path" name="path" autocomplete="off" spellcheck="false">
+    <p id="setup-error" hidden></p>
+    <div class="setup-actions">
+      <button type="button" class="close" id="setup-cancel">Cancel</button>
+      <button type="submit" class="close" id="setup-save">Continue</button>
+    </div>
+  </form>
+</dialog>
+<script>
+const q = document.querySelector("#q");
+const wall = document.querySelector("#wall");
+const status = document.querySelector("#status");
+const count = document.querySelector("#count");
+const player = document.querySelector("#player");
+const audio = document.querySelector("#audio");
+let items = [];
+let album = null;
+let trackIndex = 0;
+let plugins = [];
+
+function view() {
+  return location.hash === "#books" ? "books" : "music";
+}
+
+function note(text) {
+  status.hidden = !text;
+  status.textContent = text || "";
+}
+
+async function load() {
+  const current = view();
+  if (location.hash !== "#music" && location.hash !== "#books") history.replaceState(null, "", "#music");
+  document.body.dataset.view = current;
+  document.querySelectorAll("[data-nav]").forEach((link) => {
+    link.setAttribute("aria-current", link.dataset.nav === current ? "page" : "false");
+  });
+  const params = new URLSearchParams();
+  params.set("plugin", current);
+  const term = q.value.trim();
+  if (term) params.set("q", term);
+  try {
+    const res = await fetch("/api/items?" + params);
+    if (!res.ok) throw new Error("The catalog did not answer.");
+    items = await res.json();
+    const noun = current === "music" ? "album" : "book";
+    count.textContent = items.length === 1 ? "1 " + noun : items.length + " " + noun + "s";
+    render();
+  } catch (err) {
+    wall.replaceChildren();
+    count.textContent = "";
+    note(err.message || "The catalog did not answer.");
+  }
+}
+
+function render() {
+  wall.replaceChildren();
+  const current = view();
+  if (items.length === 0) {
+    const plugin = plugins.find((p) => p.id === current);
+    note(plugin && !plugin.rootConfigured
+      ? (current === "music" ? "No music folder is configured." : "No books folder is configured.")
+      : (termEmpty() ? "Nothing on this shelf yet." : "Nothing matches."));
+    return;
+  }
+  note("");
+  wall.className = current === "music" ? "wall" : "";
+  if (current === "books") {
+    const shelf = document.createElement("div");
+    shelf.className = "shelf";
+    items.forEach((item, index) => shelf.append(bookSpine(item, index)));
+    wall.append(shelf);
+    return;
+  }
+  items.forEach((item) => wall.append(caseButton(item)));
+}
+
+function termEmpty() {
+  return q.value.trim() === "";
+}
+
+function coverUrl(item) {
+  return "/api/items/" + encodeURIComponent(item.id) + "/cover";
+}
+
+function caseButton(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "case";
+  button.dataset.id = item.id;
+  button.setAttribute("aria-label", item.subtitle ? item.title + ", " + item.subtitle : item.title);
+  if (album && album.id === item.id) button.classList.add("out");
+  const jewel = document.createElement("span");
+  jewel.className = "jewel";
+  const booklet = document.createElement("span");
+  booklet.className = "booklet";
+  const img = document.createElement("img");
+  img.alt = "";
+  img.src = coverUrl(item);
+  img.addEventListener("error", () => { img.src = "/api/items/" + encodeURIComponent(item.id) + "/spine"; });
+  booklet.append(img);
+  const hinge = document.createElement("span");
+  hinge.className = "hinge";
+  const tray = document.createElement("span");
+  tray.className = "tray";
+  const disc = document.createElement("span");
+  disc.className = "disc";
+  const art = document.createElement("img");
+  art.alt = "";
+  art.src = coverUrl(item);
+  art.addEventListener("error", () => { art.remove(); });
+  disc.append(art);
+  tray.append(disc);
+  jewel.append(booklet, hinge, tray);
+  const title = document.createElement("span");
+  title.className = "case-title";
+  title.textContent = item.title;
+  const artist = document.createElement("span");
+  artist.className = "case-artist";
+  artist.textContent = item.subtitle;
+  button.append(jewel, title, artist);
+  button.addEventListener("click", () => openAlbum(item));
+  return button;
+}
+
+function bookSpine(item, index) {
+  const body = item.body;
+  const style = body.spine;
+  const palette = body.palette;
+  const authors = body.authors || [];
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "spine font-" + style.font + (style.caps ? " caps" : "");
+  button.style.setProperty("--w", style.width);
+  button.style.setProperty("--h", style.height);
+  button.style.setProperty("--t", style.titleSize);
+  button.style.setProperty("--bg", palette.bg);
+  button.style.setProperty("--fg", palette.fg);
+  button.style.setProperty("--accent", palette.accent);
+  button.style.setProperty("--delay", Math.min(index, 40) * 18 + "ms");
+  const joined = authors.join(" & ");
+  button.setAttribute("aria-label", joined ? item.title + " by " + joined : item.title);
+  const author = document.createElement("span");
+  author.className = "spine-author";
+  if (authors.length) {
+    author.textContent = style.width < 46
+      ? authors.map((name) => name.split(/\s+/).filter(Boolean).pop() || name).join(" & ")
+      : joined;
+    button.append(author);
+  }
+  const title = document.createElement("span");
+  title.className = "spine-title lines-" + style.lines;
+  title.textContent = style.title;
+  const mark = document.createElement("span");
+  mark.className = "spine-mark mark-" + style.mark;
+  if (body.publisher) mark.textContent = body.publisher;
+  else if (style.mark === "initials") mark.textContent = initials(joined || item.title);
+  button.append(title, mark);
+  button.addEventListener("click", () => openBook(item));
+  return button;
+}
+
+function initials(name) {
+  return name.split(/\s+/).map((word) => word[0] || "").join("").slice(0, 3);
+}
+
+function openAlbum(item) {
+  album = item;
+  trackIndex = 0;
+  document.querySelectorAll(".case").forEach((node) => node.classList.toggle("out", node.dataset.id === item.id));
+  document.querySelector("#player-title").textContent = item.title;
+  document.querySelector("#player-artist").textContent = item.subtitle;
+  const cover = document.querySelector("#player-cover");
+  cover.src = "/api/items/" + encodeURIComponent(item.id) + "/cover";
+  cover.alt = item.title;
+  const list = document.querySelector("#tracks");
+  list.replaceChildren();
+  (item.body.tracks || []).forEach((entry, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = entry.title;
+    const time = document.createElement("span");
+    time.textContent = clock(entry.durationMs);
+    button.append(time);
+    button.addEventListener("click", () => play(index));
+    list.append(button);
+  });
+  player.hidden = false;
+  requestAnimationFrame(() => player.classList.add("open"));
+  play(0);
+  document.querySelector("#player-close").focus();
+}
+
+function play(index) {
+  const tracks = album && album.body.tracks || [];
+  if (!tracks.length) return;
+  trackIndex = (index + tracks.length) % tracks.length;
+  document.querySelectorAll("#tracks button").forEach((button, i) => {
+    button.setAttribute("aria-current", i === trackIndex ? "true" : "false");
+  });
+  audio.src = "/api/items/" + encodeURIComponent(album.id) + "/audio/" + tracks[trackIndex].index;
+  audio.play().then(postNow).catch(postNow);
+}
+
+function clock(ms) {
+  if (!ms) return "";
+  const total = Math.round(ms / 1000);
+  return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
+}
+
+function closePlayer() {
+  player.classList.remove("open");
+  audio.pause();
+  album = null;
+  document.querySelectorAll(".case").forEach((node) => node.classList.remove("out"));
+  postNow();
+  window.setTimeout(() => { if (!player.classList.contains("open")) player.hidden = true; }, 460);
+}
+
+function postNow() {
+  if (!album) {
+    return;
+  }
+  const entry = album.body.tracks[trackIndex];
+  fetch("/api/now-playing", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      itemId: album.id,
+      title: album.title,
+      subtitle: album.subtitle,
+      trackTitle: entry ? entry.title : "",
+      trackIndex: entry ? entry.index : 0,
+      positionMs: Math.round((audio.currentTime || 0) * 1000),
+      paused: audio.paused
+    })
+  }).catch(() => {});
+}
+
+function openBook(item) {
+  const body = item.body;
+  const dialog = document.querySelector("#book");
+  dialog.replaceChildren();
+  dialog.setAttribute("aria-label", item.title);
+  const sheet = document.createElement("div");
+  sheet.className = "sheet-body";
+  const cover = document.createElement("div");
+  cover.className = "cover";
+  cover.style.setProperty("--bg", body.palette.bg);
+  cover.style.background = body.palette.bg;
+  const img = document.createElement("img");
+  img.alt = "";
+  img.src = "/api/items/" + encodeURIComponent(item.id) + "/cover";
+  img.addEventListener("error", () => img.remove());
+  cover.append(img);
+  const details = document.createElement("div");
+  details.className = "details";
+  const heading = document.createElement("h2");
+  heading.textContent = item.title;
+  details.append(heading);
+  if ((body.authors || []).length) {
+    const authors = document.createElement("p");
+    authors.className = "authors";
+    authors.textContent = body.authors.join(", ");
+    details.append(authors);
+  }
+  const facts = [
+    item.year,
+    body.pages ? body.pages + " pages" : "",
+    body.publisher || "",
+    body.series ? body.series + (body.seriesIndex ? " #" + body.seriesIndex : "") : "",
+    (body.formats || []).join(", ")
+  ].filter(Boolean);
+  if (facts.length) {
+    const line = document.createElement("p");
+    line.className = "facts";
+    line.textContent = facts.join(" · ");
+    details.append(line);
+  }
+  if (body.description) {
+    const description = document.createElement("p");
+    description.className = "description";
+    description.textContent = body.description;
+    details.append(description);
+  }
+  if ((body.tags || []).length) {
+    const tags = document.createElement("ul");
+    tags.className = "tags";
+    body.tags.slice(0, 8).forEach((tag) => {
+      const li = document.createElement("li");
+      li.textContent = tag;
+      tags.append(li);
+    });
+    details.append(tags);
+  }
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "close";
+  close.textContent = "Close";
+  close.addEventListener("click", () => dialog.close());
+  sheet.append(cover, details, close);
+  dialog.append(sheet);
+  dialog.showModal();
+  close.focus();
+}
+
+document.querySelector("#player-close").addEventListener("click", closePlayer);
+document.querySelector("#prev").addEventListener("click", () => play(trackIndex - 1));
+document.querySelector("#next").addEventListener("click", () => play(trackIndex + 1));
+audio.addEventListener("ended", () => play(trackIndex + 1));
+audio.addEventListener("play", postNow);
+audio.addEventListener("pause", postNow);
+q.addEventListener("input", () => load());
+window.addEventListener("hashchange", () => { closePlayer(); load(); });
+document.querySelector("#book").addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) event.currentTarget.close();
+});
+window.addEventListener("keydown", (event) => {
+  const typing = document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA");
+  if (event.key === "/" && !typing) {
+    event.preventDefault();
+    q.focus();
+  }
+  if (player.classList.contains("open") && event.key === "ArrowRight") play(trackIndex + 1);
+  if (player.classList.contains("open") && event.key === "ArrowLeft") play(trackIndex - 1);
+  if (event.key === "Escape" && player.classList.contains("open")) closePlayer();
+});
+
+const setupDialog = document.querySelector("#setup");
+const setupError = document.querySelector("#setup-error");
+let musicNeeded = false;
+
+async function readSetup() {
+  const res = await fetch("/api/music");
+  if (!res.ok) throw new Error("The catalog did not answer.");
+  return res.json();
+}
+
+function showSetup(setup, editing) {
+  musicNeeded = Boolean(setup.needed) && !editing;
+  document.querySelector("#setup-title").textContent = musicNeeded ? "Where is the music?" : "Music folder";
+  document.querySelector("#setup-save").textContent = musicNeeded ? "Continue" : "Save";
+  document.querySelector("#setup-cancel").hidden = musicNeeded;
+  document.querySelector("#setup-path").value = setup.musicRoot || setup.defaultPath || "";
+  setupError.hidden = true;
+  if (!setupDialog.open) setupDialog.showModal();
+  document.querySelector("#setup-path").focus();
+}
+
+setupDialog.addEventListener("cancel", (event) => {
+  if (musicNeeded) event.preventDefault();
+});
+document.querySelector("#setup-cancel").addEventListener("click", () => {
+  if (!musicNeeded) setupDialog.close();
+});
+document.querySelector("#setup-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const path = document.querySelector("#setup-path").value.trim();
+  const res = await fetch("/api/music", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) {
+    setupError.hidden = false;
+    setupError.textContent = (await res.text()) || "That folder did not open.";
+    return;
+  }
+  musicNeeded = false;
+  setupDialog.close();
+  await load();
+});
+document.querySelector("#library").addEventListener("click", async () => {
+  try {
+    showSetup(await readSetup(), true);
+  } catch (err) {
+    note(err.message);
+  }
+});
+
+fetch("/api/plugins")
+  .then((res) => res.json())
+  .then((rows) => { plugins = rows; })
+  .catch(() => {})
+  .then(() => readSetup())
+  .then((setup) => {
+    if (setup.needed) showSetup(setup, false);
+    else load();
+  })
+  .catch(() => load());
+</script>
+</body>
+</html>

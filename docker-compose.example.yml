@@ -1,0 +1,26 @@
+# Two host folders.
+# SPINES_DATA_DIR is the catalog, generated spines, and cover cache. Back this up.
+# Recreating the container with the same folder brings the library back without a rescan.
+# SPINES_MUSIC_DIR and SPINES_BOOKS_DIR are the libraries. They are mounted read-only.
+# Spines never writes them. Mount a parent of the music folder when the setup screen
+# should offer more than one directory inside it.
+services:
+  spines:
+    build: .
+    image: spines:local
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "${SPINES_UID:-1000}:${SPINES_GID:-1000}"
+    ports:
+      - "8787:8787"
+    environment:
+      SPINES_DATA: /data
+      SPINES_BIND: 0.0.0.0:8787
+      SPINES_MEDIA: /music
+      SPINES_MUSIC: /music
+      SPINES_BOOKS: /books
+    volumes:
+      - ${SPINES_DATA_DIR:?set SPINES_DATA_DIR to a host folder outside the container}:/data
+      - ${SPINES_MUSIC_DIR:?set SPINES_MUSIC_DIR}:/music:ro
+      - ${SPINES_BOOKS_DIR:?set SPINES_BOOKS_DIR}:/books:ro
