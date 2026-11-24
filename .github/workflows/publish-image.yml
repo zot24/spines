@@ -85,14 +85,16 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Make the package public
-        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh api --method PUT -H "Accept: application/vnd.github+json" \
-            /user/packages/container/spines/visibility \
-            -f visibility=public
+          # Umbrel pulls anonymously. A private package is a 401 on install.
+          gh api --method PATCH -H "Accept: application/vnd.github+json" \
+            /user/packages/container/spines \
+            -f visibility=public >/dev/null
+          vis=$(gh api -H "Accept: application/vnd.github+json" /user/packages/container/spines --jq .visibility)
+          [ "$vis" = "public" ] || { echo "::error::spines package is $vis"; exit 1; }
 
       - name: Summary
         run: |

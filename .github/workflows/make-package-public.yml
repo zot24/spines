@@ -1,0 +1,28 @@
+name: Make package public
+
+# ghcr.io/zot24/spines stays private until this PATCH succeeds. Umbrel has
+# no registry login, so a private package fails install with HTTP 401.
+# Dispatch this after a local push, or when the publish workflow could not
+# change visibility.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  public:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make ghcr.io/zot24/spines public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --method PATCH -H "Accept: application/vnd.github+json" \
+            /user/packages/container/spines \
+            -f visibility=public >/dev/null
+          vis=$(gh api -H "Accept: application/vnd.github+json" /user/packages/container/spines --jq .visibility)
+          echo "visibility=$vis"
+          [ "$vis" = "public" ]
